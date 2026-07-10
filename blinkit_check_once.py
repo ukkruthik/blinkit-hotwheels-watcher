@@ -55,6 +55,8 @@ def save_last_state(state: dict) -> None:
 async def set_location(page, pincode: str) -> None:
     await page.goto("https://blinkit.com", timeout=30000)
     await page.wait_for_timeout(2000)
+    print(f"[debug] Page title after load: {await page.title()!r}")
+    print(f"[debug] Page URL after load: {page.url}")
 
     try:
         loc_button = page.get_by_text("select location", exact=False).first
@@ -117,9 +119,26 @@ async def search_and_read(page, query: str) -> list[dict]:
 async def run_check() -> list[dict]:
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=HEADLESS)
-        page = await browser.new_page()
+        page = await browser.new_page(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1280, "height": 800},
+        )
         await set_location(page, PINCODE)
         products = await search_and_read(page, SEARCH_TERM)
+
+        # Always save a debug snapshot so we can see exactly what the
+        # browser was looking at, in case Blinkit blocked/challenged it.
+        try:
+            await page.screenshot(path="debug_screenshot.png", full_page=True)
+            html = await page.content()
+            with open("debug_page.html", "w", encoding="utf-8") as f:
+                f.write(html)
+        except Exception as e:
+            print(f"[!] Could not save debug snapshot: {e}")
+
         await browser.close()
         return products
 
